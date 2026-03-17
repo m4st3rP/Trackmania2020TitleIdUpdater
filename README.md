@@ -1,4 +1,4 @@
-# TitleIdUpdater
+# Trackmania2020TitleIdUpdater
 
 This script is used to batch process Trackmania `.Map.Gbx` files in a specified folder (and its subdirectories). It parses each map file, checks its `TitleId`, and if the `TitleId` matches a specific value (`OrbitalDev@falguiere`), it changes it to `TMStadium` and overwrites the original file in-place.
 
@@ -26,10 +26,10 @@ Provide the path to the folder containing your maps as the first argument:
 
 ```bash
 # Using dotnet-script
-dotnet script TitleIdUpdater.cs "C:\Path\To\Your\Map\Folder"
+dotnet script Trackmania2020TitleIdUpdater.cs "C:\Path\To\Your\Map\Folder"
 
 # Alternatively, if compiled to an executable or using `dotnet run` 
-dotnet run TitleIdUpdater.cs "C:\Path\To\Your\Map\Folder"
+dotnet run Trackmania2020TitleIdUpdater.cs "C:\Path\To\Your\Map\Folder"
 ```
 
 ## Example Output
