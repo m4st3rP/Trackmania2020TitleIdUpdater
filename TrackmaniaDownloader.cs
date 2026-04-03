@@ -25,7 +25,8 @@ internal static class TrackmaniaDownloader
             Console.WriteLine("\nTrackmania Map Downloader");
             Console.WriteLine("1. Weekly Shorts");
             Console.WriteLine("2. Weekly Grands");
-            Console.WriteLine("3. Track of the Day");
+            Console.WriteLine("3. Seasonal Campaigns");
+            Console.WriteLine("4. Track of the Day");
             Console.WriteLine("Q. Quit");
             Console.Write("Select an option: ");
 
@@ -39,6 +40,10 @@ internal static class TrackmaniaDownloader
                 await HandleWeeklyGrands(tmio);
             }
             else if (choice == "3")
+            {
+                await HandleSeasonal(tmio);
+            }
+            else if (choice == "4")
             {
                 await HandleTrackOfTheDay(tmio);
             }
@@ -95,6 +100,42 @@ internal static class TrackmaniaDownloader
 
             await DownloadMaps(fullCampaign.Playlist.Select(m => (m.Name, (string?)m.FileName, (string?)m.FileUrl)), downloadDir);
         }
+    }
+
+    private static async Task HandleSeasonal(TrackmaniaIO tmio)
+    {
+        Console.WriteLine("\n[Seasonal Campaigns]");
+        Console.WriteLine("Which campaign would you like to download? (e.g., Winter 2026, Summer 2024)");
+        var input = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(input)) return;
+
+        Console.WriteLine("Fetching available Seasonal campaigns...");
+        var campaigns = await FetchAllSeasonalCampaigns(tmio);
+
+        var campaignItem = campaigns.FirstOrDefault(c => c.Name.Contains(input, StringComparison.OrdinalIgnoreCase));
+        if (campaignItem == null)
+        {
+            Console.WriteLine($"Error: Could not find seasonal campaign matching '{input}'.");
+            return;
+        }
+
+        Console.WriteLine($"Processing {campaignItem.Name} (ID: {campaignItem.Id})...");
+        var fullCampaign = await tmio.GetSeasonalCampaignAsync(campaignItem.Id);
+        if (fullCampaign?.Playlist == null)
+        {
+            Console.WriteLine($"Could not retrieve playlist for {campaignItem.Name}.");
+            return;
+        }
+
+        var downloadDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "Trackmania2020", "Maps", "Downloaded", "Seasonal", campaignItem.Name);
+
+        var mapsWithPrefix = fullCampaign.Playlist
+            .Select((m, i) => (m.Name, (string?)m.FileName, (string?)m.FileUrl, prefix: $"{(i + 1):D2} - "))
+            .ToList();
+
+        await DownloadMaps(mapsWithPrefix.Select(x => (x.Name, x.Item2, x.Item3)), downloadDir, mapsWithPrefix.Select(x => x.prefix).ToList());
     }
 
     private static async Task HandleTrackOfTheDay(TrackmaniaIO tmio)
@@ -156,10 +197,18 @@ internal static class TrackmaniaDownloader
 
     private static async Task DownloadMaps(IEnumerable<(string Name, string? FileName, string? FileUrl)> maps, string downloadDir, string? fileNamePrefix = null)
     {
+        var mapList = maps.ToList();
+        await DownloadMaps(mapList, downloadDir, fileNamePrefix != null ? Enumerable.Repeat(fileNamePrefix, mapList.Count).ToList() : null);
+    }
+
+    private static async Task DownloadMaps(IEnumerable<(string Name, string? FileName, string? FileUrl)> maps, string downloadDir, List<string>? prefixes)
+    {
         if (!Directory.Exists(downloadDir)) Directory.CreateDirectory(downloadDir);
 
-        foreach (var (name, rawFileName, url) in maps)
+        var mapList = maps.ToList();
+        for (int i = 0; i < mapList.Count; i++)
         {
+            var (name, rawFileName, url) = mapList[i];
             if (string.IsNullOrEmpty(url))
             {
                 Console.WriteLine($"No download URL for map: {name}");
@@ -181,7 +230,10 @@ internal static class TrackmaniaDownloader
             // Clean illegal chars
             foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
 
-            if (!string.IsNullOrEmpty(fileNamePrefix)) fileName = fileNamePrefix + fileName;
+            if (prefixes != null && i < prefixes.Count && !string.IsNullOrEmpty(prefixes[i]))
+            {
+                fileName = prefixes[i] + fileName;
+            }
 
             var filePath = Path.Combine(downloadDir, fileName);
             Console.WriteLine($"Downloading {name}...");
@@ -280,6 +332,20 @@ internal static class TrackmaniaDownloader
         while (page < pageCount)
         {
             var response = await tmio.GetWeeklyGrandCampaignsAsync(page);
+            if (response.Campaigns != null) allCampaigns.AddRange(response.Campaigns);
+            pageCount = response.PageCount;
+            page++;
+        }
+        return allCampaigns;
+    }
+
+    private static async Task<List<CampaignItem>> FetchAllSeasonalCampaigns(TrackmaniaIO tmio)
+    {
+        var allCampaigns = new List<CampaignItem>();
+        int page = 0, pageCount = 1;
+        while (page < pageCount)
+        {
+            var response = await tmio.GetSeasonalCampaignsAsync(page);
             if (response.Campaigns != null) allCampaigns.AddRange(response.Campaigns);
             pageCount = response.PageCount;
             page++;
